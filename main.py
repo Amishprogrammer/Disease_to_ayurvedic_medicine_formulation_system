@@ -20,6 +20,7 @@ os.system("start \"\" http://127.0.0.1:5000")
 @app.route('/', methods=['GET', 'POST'])
 def home():
     if request.method == 'POST':
+        # function below was contributed by Ashutosh Rout
         def preprocess_text(text):
             words = word_tokenize(text.lower())
             words = [word for word in words if word.isalpha() and word not in stop_words]
@@ -111,6 +112,8 @@ def home():
 
         user_input = get_column_values(original_data_same_indices, 'Symptom')
         print("*"*100,"\n",original_data_same_indices)
+
+        # function below was contributed by Ashutosh Rout
         def symptoms_desc(symptom_name):
             row = symptoms[symptoms['Symptom'] == symptom_name.lower()]
             if not row.empty:
@@ -118,11 +121,11 @@ def home():
                 print(f'Description of "{symptom_name}": {description}')
             else:
                 print(f'Symptom "{symptom_name}" not found in the DataFrame.')
-
+        # function below was contributed by Ashutosh Rout
         def symptoms_lst_desc(user_symptoms):
             for item in user_symptoms:
                 symptoms_desc(item)
-
+        # function below was contributed by Ashutosh Rout
         def correct_symptoms(symptoms):
             corrected_symptoms = []
             for symptom in symptoms:
