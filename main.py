@@ -1,167 +1,250 @@
-from flask import Flask, request, render_template
-import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.model_selection import train_test_split
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import accuracy_score, classification_report
-import matplotlib.pyplot as plt
-# from wordcloud import WordCloud
+import logging
+import os
+import re
+import webbrowser
+from pathlib import Path
+from threading import Timer
+
+import difflib
 import nltk
+import pandas as pd
+from dotenv import load_dotenv
+from flask import Flask, flash, render_template, request
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics import accuracy_score, classification_report
+from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.neighbors import KNeighborsClassifier
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
-import os
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.naive_bayes import MultinomialNB
-import difflib
+
+load_dotenv()
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+log = logging.getLogger(__name__)
+
+BASE_DIR = Path(__file__).parent
+
+# Download required NLTK data once at startup
+for _resource, _category in [('stopwords', 'corpora'), ('punkt', 'tokenizers'), ('punkt_tab', 'tokenizers')]:
+    try:
+        nltk.data.find(f'{_category}/{_resource}')
+    except LookupError:
+        nltk.download(_resource, quiet=True)
 
 app = Flask(__name__)
-os.system("start \"\" http://127.0.0.1:5000")
+app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
 
+# ── NLP helpers (module-level, not nested inside routes) ─────────────────────
+_stop_words = set(stopwords.words('english'))
+
+
+def preprocess_text(text: str) -> str:
+    words = word_tokenize(str(text).lower())
+    return ' '.join(w for w in words if w.isalpha() and w not in _stop_words)
+
+
+def correct_symptoms(symptoms: list, vocabulary: list) -> list:
+    corrected = []
+    for sym in symptoms:
+        match = difflib.get_close_matches(sym, vocabulary, n=1, cutoff=0.5)
+        corrected.append(match[0] if match else sym)
+    return corrected
+
+
+# ── Model cache — trained once at startup, reused for every request ───────────
+_cache: dict = {}
+
+
+def _load_models() -> dict:
+    log.info("Loading CSVs and training models...")
+
+    # ── Disease prediction: KNN + TF-IDF ──────────────────────────────────
+    data = pd.read_csv(BASE_DIR / 'Symptom2Disease.csv')
+    data.drop(columns=[c for c in data.columns if 'Unnamed' in c], inplace=True)
+
+    preprocessed = data['text'].apply(preprocess_text)
+    tfidf_disease = TfidfVectorizer(max_features=2000)
+    X = tfidf_disease.fit_transform(preprocessed).toarray()
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, data['label'], test_size=0.2, random_state=42
+    )
+    knn = KNeighborsClassifier(n_neighbors=5)
+    knn.fit(X_train, y_train)
+    preds = knn.predict(X_test)
+    accuracy = round(accuracy_score(y_test, preds) * 100, 1)
+    report_html = (
+        pd.DataFrame(classification_report(y_test, preds, output_dict=True))
+        .transpose()
+        .round(3)
+        .to_html(classes='report-table', border=0)
+    )
+    log.info(f"KNN trained. Accuracy: {accuracy}%")
+
+    # ── Formulation recommendation: Naive Bayes + TF-IDF ──────────────────
+    df_form = pd.read_csv(BASE_DIR / 'Formulation-Indications.csv')
+    indications = df_form['Main Indications'].astype(str).apply(
+        lambda x: x.replace(',', ' ').lower()
+    )
+    tfidf_form = TfidfVectorizer()
+    X_form = tfidf_form.fit_transform(indications)
+    nb = MultinomialNB()
+    nb.fit(X_form, df_form['Name of Medicine'])
+
+    # Vocabulary for spell correction (built from all indication tokens)
+    vocab = list({w for ind in indications for w in ind.split()})
+    log.info("Naive Bayes formulation model trained.")
+
+    # ── Formulation class lookup (A → "Asava Arista", etc.) ───────────────
+    class_map: dict = {}
+    class_csv = BASE_DIR / 'FormulationClass.csv'
+    if class_csv.exists():
+        df_class = pd.read_csv(class_csv, header=0)
+        desc_col = df_class.columns[1]
+        class_map = {
+            str(k).strip(): str(v).strip()
+            for k, v in zip(df_class['Class'], df_class[desc_col])
+        }
+
+    # ── Optional ayurvedic symptom lookup table ────────────────────────────
+    symptoms_df = None
+    sym_csv = BASE_DIR / 'ayurvedic_symptoms_desc_updated.csv'
+    if sym_csv.exists():
+        symptoms_df = pd.read_csv(sym_csv)
+        symptoms_df['Symptom'] = symptoms_df['Symptom'].str.lower().str.strip()
+        log.info("Ayurvedic symptom lookup loaded.")
+    else:
+        log.warning(
+            "ayurvedic_symptoms_desc_updated.csv not found — "
+            "using simplified formulation matching via disease name."
+        )
+
+    return {
+        'tfidf_disease': tfidf_disease,
+        'knn': knn,
+        'accuracy': accuracy,
+        'report_html': report_html,
+        'df_form': df_form,
+        'tfidf_form': tfidf_form,
+        'nb': nb,
+        'vocab': vocab,
+        'class_map': class_map,
+        'symptoms_df': symptoms_df,
+    }
+
+
+def get_models() -> dict:
+    if not _cache:
+        _cache.update(_load_models())
+    return _cache
+
+
+# ── Prediction pipeline ───────────────────────────────────────────────────────
+def predict(user_input: str) -> dict:
+    m = get_models()
+
+    # Step 1 — predict disease
+    preprocessed = preprocess_text(user_input)
+    if not preprocessed.strip():
+        raise ValueError("Could not extract meaningful symptoms. Please describe them in more detail.")
+
+    disease_vec = m['tfidf_disease'].transform([preprocessed])
+    predicted_disease = m['knn'].predict(disease_vec)[0]
+
+    # Step 2 — build symptom query for formulation lookup
+    if m['symptoms_df'] is not None:
+        # Full pipeline: map user words → ayurvedic symptom DB → get Symptom keywords
+        words = [w for w in re.split(r'[,\s]+', user_input.lower()) if w.strip()]
+        sym_df = m['symptoms_df'].copy()
+        sym_df['score'] = sym_df['English_Symptoms'].apply(
+            lambda x: sum(w in str(x).lower() for w in words)
+        )
+        matched = sym_df[sym_df['score'] > 0].sort_values('score', ascending=False).head(10)
+        query_keywords = ' '.join(matched['Symptom'].tolist()) or predicted_disease.lower()
+    else:
+        # Simplified: disease name drives the formulation lookup
+        query_keywords = predicted_disease.lower()
+
+    # Step 3 — spell-correct keywords, predict top 3 formulations
+    keyword_list = query_keywords.split()
+    corrected = correct_symptoms(keyword_list, m['vocab'])
+
+    formulation_names: list = []
+    seen: set = set()
+    for kw in corrected:
+        try:
+            kw_vec = m['tfidf_form'].transform([kw])
+            pred = m['nb'].predict(kw_vec)[0]
+            if pred not in seen:
+                seen.add(pred)
+                formulation_names.append(pred)
+                if len(formulation_names) >= 3:
+                    break
+        except Exception:
+            continue
+
+    # Fallback: use disease name as query directly
+    if not formulation_names:
+        try:
+            disease_q = m['tfidf_form'].transform([predicted_disease.lower()])
+            formulation_names = [m['nb'].predict(disease_q)[0]]
+        except Exception:
+            pass
+
+    # Step 4 — fetch full medicine details
+    df_form = m['df_form']
+    class_map = m['class_map']
+    medicines = []
+    for name in formulation_names:
+        rows = df_form[df_form['Name of Medicine'] == name]
+        if not rows.empty:
+            r = rows.iloc[0]
+            code = str(r.get('Class', ''))
+            medicines.append({
+                'name': str(r.get('Name of Medicine', '')),
+                'indications': str(r.get('Main Indications', '')),
+                'dose': str(r.get('Dose', 'N/A')),
+                'precaution': str(r.get('Precaution/ Contraindication', 'N/A')),
+                'reference': str(r.get('Reference text', '')),
+                'preferred_use': str(r.get('Preferred use (OPD/ IPD)', 'N/A')),
+                'class_code': code,
+                'class_name': class_map.get(code, code),
+            })
+
+    return {
+        'disease': predicted_disease,
+        'medicines': medicines,
+        'accuracy': m['accuracy'],
+        'report_html': m['report_html'],
+    }
+
+
+# ── Routes ────────────────────────────────────────────────────────────────────
 @app.route('/', methods=['GET', 'POST'])
 def home():
+    result = None
+    symptom_input = ''
+
     if request.method == 'POST':
-        # function below was contributed by Ashutosh Rout
-        def preprocess_text(text):
-            words = word_tokenize(text.lower())
-            words = [word for word in words if word.isalpha() and word not in stop_words]
-            return ' '.join(words)
+        symptom_input = request.form.get('symptomInput', '').strip()
+        if not symptom_input:
+            flash("Please describe your symptoms.")
+        elif len(symptom_input) < 5:
+            flash("Please provide more detail about your symptoms.")
+        else:
+            try:
+                result = predict(symptom_input)
+            except ValueError as e:
+                flash(str(e))
+            except Exception as e:
+                log.error(f"Prediction error: {e}", exc_info=True)
+                flash("An error occurred during analysis. Please try again.")
 
-        symptoms = pd.read_csv('ayurvedic_symptoms_desc_updated.csv')
-        data = pd.read_csv('Symptom2Disease.csv')
-        data.drop(columns=["Unnamed: 0"], inplace=True)
-        df1 = pd.read_csv('Formulation-Indications.csv')
+    return render_template('index.html', result=result, symptom_input=symptom_input)
 
-        labels = data['label']
-        symptoms = data['text']
-
-        stop_words = set(stopwords.words('english'))
-
-        preprocessed_symptoms = symptoms.apply(preprocess_text)
-
-        tfidf_vectorizer = TfidfVectorizer(max_features=2000)
-        tfidf_features = tfidf_vectorizer.fit_transform(preprocessed_symptoms).toarray()
-
-        X_train, X_test, y_train, y_test = train_test_split(tfidf_features, labels, test_size=0.2, random_state=42)
-
-        knn_classifier = KNeighborsClassifier(n_neighbors=5)
-        knn_classifier.fit(X_train, y_train)
-        predictions = knn_classifier.predict(X_test)
-        accuracy = accuracy_score(y_test, predictions)
-        # print(f'Accuracy: {accuracy:.2f}')
-        classificationreport = classification_report(y_test, predictions, output_dict=True)
-
-        # Convert the classification report dictionary to a Pandas DataFrame
-        df = pd.DataFrame(classificationreport).transpose()
-
-        # Convert DataFrame to HTML table
-        classificationreport = df.to_html()
-
-        symptom = request.form.get('symptomInput')
-        preprocessed_symptom = preprocess_text(symptom)
-        symptom_tfidf = tfidf_vectorizer.transform([preprocessed_symptom])
-        predicted_disease = knn_classifier.predict(symptom_tfidf)
-        pred_disease = f'Predicted Disease: {predicted_disease[0]}'
-
-        data1 = pd.read_csv('ayurvedic_symptoms_desc_updated.csv')
-        # print(data1)
-        words = symptom.split(", " or " ")
-        data1['common_words'] = data1['English_Symptoms'].apply(lambda x: sum(word.lower() in x.lower() for word in words))
-        filtered_data = data1[data1['common_words'] > 0]
-        filtered_data = filtered_data.sort_values(by='common_words', ascending=False)
-        filtered_data = filtered_data.drop(columns=['common_words'])
-        original_data_same_indices = data1.loc[filtered_data.index]
-
-        original_data_same_indices = original_data_same_indices.head(10)
-
-        formulations_lst = list(df1['Name of Medicine'])
-        original_list = list(df1['Main Indications'])
-
-        processed_list = []
-        for item in original_list:
-            processed_item = ''.join(item.split()).lower()
-            processed_list.append(processed_item)
-
-        list_of_symptoms = processed_list
-        flat_symptoms = [symptom.replace(',', ' ').split() for symptoms in list_of_symptoms for symptom in symptoms.split(',')]
-        unique_symptoms = list(set(symptom for sublist in flat_symptoms for symptom in sublist))
-
-        symptoms = pd.read_csv('ayurvedic_symptoms_desc_updated.csv')
-
-        symptoms['Symptom'] = symptoms['Symptom'].str.lower()
-
-        correct_words = unique_symptoms
-        data2 = {
-            "Formulation": formulations_lst,
-            "Symptoms": processed_list,
-        }
-        df = pd.DataFrame(data2)
-
-        tfidf_vectorizer = TfidfVectorizer()
-        X_tfidf = tfidf_vectorizer.fit_transform(df['Symptoms'])
-
-        clf = MultinomialNB()
-        clf.fit(X_tfidf, df['Formulation'])
-        def get_column_values(df, column_name):
-            # Get the column values as a list
-            column_values = df[column_name].tolist()
-
-            # Convert the list to a string with space separation
-            column_values_str = ' '.join(map(str, column_values))
-
-            return column_values_str
-
-        user_input = get_column_values(original_data_same_indices, 'Symptom')
-        print("*"*100,"\n",original_data_same_indices)
-
-        # function below was contributed by Ashutosh Rout
-        def symptoms_desc(symptom_name):
-            row = symptoms[symptoms['Symptom'] == symptom_name.lower()]
-            if not row.empty:
-                description = row.iloc[0]['Description']
-                print(f'Description of "{symptom_name}": {description}')
-            else:
-                print(f'Symptom "{symptom_name}" not found in the DataFrame.')
-        # function below was contributed by Ashutosh Rout
-        def symptoms_lst_desc(user_symptoms):
-            for item in user_symptoms:
-                symptoms_desc(item)
-        # function below was contributed by Ashutosh Rout
-        def correct_symptoms(symptoms):
-            corrected_symptoms = []
-            for symptom in symptoms:
-                corrected_symptom = difflib.get_close_matches(symptom, correct_words, n=1, cutoff=0.5)
-                if corrected_symptom:
-                    corrected_symptoms.append(corrected_symptom[0])
-                else:
-                    corrected_symptoms.append(symptom)
-            return corrected_symptoms
-
-        input_symptoms = user_input.split()
-        # print("*"*100,"\n",input_symptoms)
-        new_symptoms = correct_symptoms(input_symptoms)
-
-        symptoms_lst_desc(new_symptoms)
-
-        new_symptoms_tfidf = tfidf_vectorizer.transform(new_symptoms)
-        predicted_label = clf.predict(new_symptoms_tfidf)
-
-        c = len(original_data_same_indices) if len(original_data_same_indices) < 10 else 10
-        medicines = []
-        while (c > 0):
-            meds = []
-            mask = df1.iloc[:, 0].isin([predicted_label[len(original_data_same_indices) - c]])
-            filtered_df = df1[mask]
-            for index, row in filtered_df.iterrows():
-                meds.append(str(row))
-            c -= 1
-            medicines.append(meds)
-        return render_template('index.html',
-                               predictedDisease=pred_disease,
-                               prescribedMedicines=medicines[0:3],
-                               accuracy = f'Accuracy: {accuracy:.2f}',
-                               classificationreport = classificationreport)
-
-    return render_template('index.html')
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    get_models()  # pre-warm before first request
+    Timer(1, webbrowser.open, args=('http://127.0.0.1:5000',)).start()
+    app.run(debug=os.environ.get('FLASK_DEBUG', '0') == '1')
