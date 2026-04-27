@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ayurvedic Formulation Recommender</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<header>
+    <div class="container">
+        <div class="logo">🌿</div>
+        <h1>Ayurvedic Formulation Recommender</h1>
+        <p class="subtitle">Describe your symptoms to receive personalised Ayurvedic formulation recommendations powered by machine learning</p>
+    </div>
+</header>
+
+<main class="container">
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <div class="alerts">
+                {% for msg in messages %}
+                    <div class="alert">⚠️ {{ msg }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <div class="card input-card">
+        <h2>Enter Your Symptoms</h2>
+        <p class="hint">Be as descriptive as possible — mention the area of the body, duration, and nature of discomfort.</p>
+        <form method="POST" action="{{ url_for('home') }}">
+            <textarea
+                name="symptomInput"
+                id="symptomInput"
+                rows="5"
+                placeholder="e.g. I have had a persistent dry cough, mild fever, joint pain and fatigue for the past three days."
+                required
+            >{{ symptom_input }}</textarea>
+            <div class="form-footer">
+                <button type="submit" class="btn-primary">
+                    <span class="btn-icon">🔍</span> Analyse Symptoms
+                </button>
+                {% if result %}
+                <button type="button" class="btn-secondary" onclick="document.getElementById('symptomInput').value=''; this.closest('form').reset();">
+                    Clear
+                </button>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+
+    {% if result %}
+    <div class="results" id="results">
+
+        <div class="disease-banner">
+            <div class="disease-info">
+                <span class="banner-label">Predicted Condition</span>
+                <h2 class="disease-name">{{ result.disease }}</h2>
+            </div>
+            <div class="accuracy-box">
+                <span class="banner-label">Model Accuracy</span>
+                <span class="accuracy-value">{{ result.accuracy }}%</span>
+            </div>
+        </div>
+
+        {% if result.medicines %}
+        <h3 class="section-title">Recommended Formulations</h3>
+        <div class="medicines-grid">
+            {% for med in result.medicines %}
+            <div class="medicine-card">
+                <div class="medicine-header">
+                    <div>
+                        <h4 class="medicine-name">{{ med.name }}</h4>
+                        <span class="class-tag" title="{{ med.class_name }}">{{ med.class_name }}</span>
+                    </div>
+                    <span class="preferred-badge">{{ med.preferred_use }}</span>
+                </div>
+                <div class="medicine-body">
+                    <div class="info-row">
+                        <span class="info-label">Main Indications</span>
+                        <span class="info-value">{{ med.indications }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Dose</span>
+                        <span class="info-value dose">{{ med.dose }}</span>
+                    </div>
+                    {% if med.precaution and med.precaution not in ('N/A', 'NS', 'nan') %}
+                    <div class="info-row warning-row">
+                        <span class="info-label">⚠ Precaution</span>
+                        <span class="info-value">{{ med.precaution }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="info-row muted-row">
+                        <span class="info-label">Reference</span>
+                        <span class="info-value">{{ med.reference }}</span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="no-results">No formulations found for the predicted condition. Try rephrasing your symptoms.</p>
+        {% endif %}
+
+        <details class="report-details">
+            <summary>📊 View Full Classification Report</summary>
+            <div class="report-scroll">
+                {{ result.report_html | safe }}
+            </div>
+        </details>
+
+    </div>
+    {% endif %}
+
+</main>
+
+<footer>
+    <div class="container">
+        <p class="disclaimer">
+            ⚠️ <strong>Disclaimer:</strong> This tool is for informational purposes only and does not constitute medical advice.
+            Always consult a qualified Ayurvedic or healthcare practitioner before starting any treatment.
+        </p>
+    </div>
+</footer>
+
+<script>
+    // Scroll to results after form submission
+    const results = document.getElementById('results');
+    if (results) {
+        setTimeout(() => results.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    }
+</script>
+
+</body>
+</html>
