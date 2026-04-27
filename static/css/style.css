@@ -1,0 +1,402 @@
+/* ── Design tokens ──────────────────────────────────────────────────────── */
+:root {
+    --green-900: #14421f;
+    --green-700: #1e6b33;
+    --green-500: #2d9e50;
+    --green-300: #6fcf8e;
+    --green-100: #e8f5ec;
+    --amber-600: #d97706;
+    --amber-100: #fffbeb;
+    --red-100: #fff1f1;
+    --red-600: #c0392b;
+    --text: #1a2320;
+    --text-muted: #5a7060;
+    --border: #c8e6cf;
+    --bg: #f3fbf5;
+    --white: #ffffff;
+    --shadow-sm: 0 1px 4px rgba(0,0,0,0.07);
+    --shadow: 0 3px 14px rgba(0,0,0,0.09);
+    --shadow-lg: 0 8px 28px rgba(0,0,0,0.13);
+    --radius: 14px;
+    --radius-sm: 8px;
+}
+
+/* ── Reset ──────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+header {
+    background: linear-gradient(140deg, var(--green-900) 0%, var(--green-700) 60%, var(--green-500) 100%);
+    color: white;
+    padding: 52px 0 44px;
+    text-align: center;
+}
+
+.logo { font-size: 3.2rem; margin-bottom: 14px; line-height: 1; }
+
+header h1 {
+    font-size: clamp(1.5rem, 4vw, 2.2rem);
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    margin-bottom: 10px;
+}
+
+.subtitle {
+    opacity: 0.82;
+    font-size: 1rem;
+    max-width: 580px;
+    margin: 0 auto;
+}
+
+/* ── Main ───────────────────────────────────────────────────────────────── */
+main { flex: 1; padding: 36px 0 56px; }
+
+/* ── Alerts ─────────────────────────────────────────────────────────────── */
+.alerts { margin-bottom: 20px; }
+.alert {
+    background: var(--amber-100);
+    border: 1px solid #fcd34d;
+    border-left: 4px solid var(--amber-600);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    color: #7c3d0a;
+    margin-bottom: 8px;
+    font-size: 0.92rem;
+}
+
+/* ── Card ───────────────────────────────────────────────────────────────── */
+.card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 32px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+}
+
+.input-card h2 {
+    font-size: 1.15rem;
+    color: var(--green-900);
+    margin-bottom: 6px;
+}
+
+.hint {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    margin-bottom: 16px;
+}
+
+/* ── Form ───────────────────────────────────────────────────────────────── */
+textarea {
+    width: 100%;
+    padding: 14px 16px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 0.97rem;
+    font-family: inherit;
+    color: var(--text);
+    background: #f8fdf9;
+    resize: vertical;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    line-height: 1.6;
+}
+
+textarea:focus {
+    outline: none;
+    border-color: var(--green-500);
+    box-shadow: 0 0 0 3px rgba(45,158,80,0.15);
+}
+
+textarea::placeholder { color: #94b8a0; }
+
+.form-footer {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+}
+
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--green-700);
+    color: white;
+    border: none;
+    padding: 11px 26px;
+    border-radius: var(--radius-sm);
+    font-size: 0.97rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.18s, transform 0.1s, box-shadow 0.18s;
+    box-shadow: 0 2px 8px rgba(30,107,51,0.25);
+}
+
+.btn-primary:hover {
+    background: var(--green-900);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(30,107,51,0.3);
+}
+
+.btn-primary:active { transform: translateY(0); }
+
+.btn-secondary {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1.5px solid var(--border);
+    padding: 11px 20px;
+    border-radius: var(--radius-sm);
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.18s, color 0.18s;
+}
+
+.btn-secondary:hover { border-color: var(--green-500); color: var(--green-700); }
+
+/* ── Disease banner ─────────────────────────────────────────────────────── */
+.disease-banner {
+    background: linear-gradient(135deg, var(--green-900) 0%, var(--green-700) 100%);
+    color: white;
+    border-radius: var(--radius);
+    padding: 26px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+    gap: 20px;
+    box-shadow: var(--shadow-lg);
+}
+
+.banner-label {
+    display: block;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    opacity: 0.75;
+    margin-bottom: 4px;
+}
+
+.disease-name {
+    font-size: clamp(1.3rem, 3vw, 1.75rem);
+    font-weight: 800;
+    letter-spacing: -0.3px;
+}
+
+.accuracy-box {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 10px;
+    padding: 14px 22px;
+    text-align: center;
+    min-width: 110px;
+}
+
+.accuracy-value {
+    display: block;
+    font-size: 2rem;
+    font-weight: 800;
+    margin-top: 2px;
+    line-height: 1;
+}
+
+/* ── Section title ──────────────────────────────────────────────────────── */
+.section-title {
+    font-size: 1.05rem;
+    color: var(--green-900);
+    font-weight: 700;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--green-100);
+}
+
+/* ── Medicine cards grid ────────────────────────────────────────────────── */
+.medicines-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+    gap: 18px;
+    margin-bottom: 28px;
+}
+
+.medicine-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.15s, box-shadow 0.15s;
+    display: flex;
+    flex-direction: column;
+}
+
+.medicine-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg);
+}
+
+.medicine-header {
+    background: var(--green-100);
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.medicine-name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--green-900);
+    line-height: 1.3;
+}
+
+.class-tag {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    margin-top: 3px;
+    display: block;
+    font-style: italic;
+}
+
+.preferred-badge {
+    background: var(--green-700);
+    color: white;
+    font-size: 0.66rem;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 20px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.medicine-body {
+    padding: 14px 16px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.info-row { display: flex; flex-direction: column; gap: 2px; }
+
+.info-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+    font-weight: 700;
+}
+
+.info-value { font-size: 0.88rem; color: var(--text); }
+
+.info-value.dose {
+    font-weight: 700;
+    color: var(--green-700);
+    font-size: 0.92rem;
+}
+
+.warning-row .info-label { color: var(--red-600); }
+.warning-row .info-value {
+    background: var(--red-100);
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: 0.83rem;
+    color: var(--red-600);
+}
+
+.muted-row .info-value { color: var(--text-muted); font-size: 0.82rem; }
+
+.no-results {
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 20px 0;
+    text-align: center;
+}
+
+/* ── Classification report ──────────────────────────────────────────────── */
+.report-details {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-top: 4px;
+}
+
+.report-details summary {
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 0.93rem;
+    color: var(--green-700);
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.report-details summary::-webkit-details-marker { display: none; }
+.report-details[open] summary { margin-bottom: 16px; }
+
+.report-scroll { overflow-x: auto; }
+
+.report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.report-table th {
+    background: var(--green-100);
+    color: var(--green-900);
+    font-weight: 700;
+    padding: 8px 14px;
+    text-align: left;
+    border-bottom: 2px solid var(--border);
+}
+
+.report-table td {
+    padding: 7px 14px;
+    border-bottom: 1px solid #e8f0ea;
+    color: var(--text);
+}
+
+.report-table tr:last-child td { border-bottom: none; }
+.report-table tr:hover td { background: var(--green-100); }
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+footer {
+    background: var(--green-900);
+    color: rgba(255,255,255,0.65);
+    padding: 22px 0;
+    text-align: center;
+    margin-top: auto;
+}
+
+.disclaimer { font-size: 0.82rem; max-width: 680px; margin: 0 auto; line-height: 1.6; }
+.disclaimer strong { color: rgba(255,255,255,0.85); }
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+    .card { padding: 20px; }
+    .disease-banner { flex-direction: column; text-align: center; padding: 20px; }
+    .accuracy-box { width: 100%; }
+    .medicines-grid { grid-template-columns: 1fr; }
+    header { padding: 36px 0 30px; }
+}
